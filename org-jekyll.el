@@ -25,6 +25,40 @@
 ;;; Code:
 
 ;;(require 'ox-html)
+(defun org-hyde-convert-pre (html)
+  "Replace pre blocks with syntax blocks for pygments."
+  (save-excursion
+    (let (pos info params src-re code-re)
+      (with-temp-buffer
+        (insert html)
+        (goto-char (point-min))
+        (save-match-data
+          (while (re-search-forward 
+                  "<pre\\(.*?\\)>\\(\\(.\\|[[:space:]]\\|\\\n\\)*?\\)</pre.*?>"
+                  nil t 1)
+            (setq code (match-string-no-properties 2))
+            (if (save-match-data 
+                  (string-match "example" (match-string-no-properties 1)))
+                (setq lang "html")
+              (setq lang (substring 
+                          (match-string-no-properties 1) 16 -1))
+              ;; handling emacs-lisp separately. pygments raises error when language 
+              ;; is unknown. list of languages variable should be added?
+              (if (string= "emacs-lisp" lang)
+                  (setq lang "common-lisp")))
+            (save-match-data
+              (setq code (replace-regexp-in-string "<.*?>" "" code))
+              (while (string-match "&gt;" code)
+                (setq code (replace-match ">" t t code)))
+              (while (string-match "&lt;" code)
+                (setq code (replace-match "<" t t code)))
+              (while (string-match "&amp;" code)
+                (setq code (replace-match "&" t t code))))
+            (replace-match 
+             (format "\n{%% highlight %s %%}\n%s\n{%% endhighlight %%}" lang code)
+             nil t)))
+        (setq html (buffer-substring-no-properties (point-min) (point-max))))))
+  html)
 
 (defvar org-jekyll-category nil
   "Specify a property which, if defined in the entry, is used as
@@ -172,6 +206,7 @@ language.")
                                                 :table-of-contents nil))
                    (buffer-string))))
           (set-buffer org-buffer)
+	  (setq html (org-hyde-convert-pre html))
           (delete-region (point-min) (point-max))
           (insert contents)
           (save-buffer))
